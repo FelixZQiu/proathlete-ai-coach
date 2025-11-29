@@ -1,0 +1,5 @@
+{
+  "name": "ProAthlete AI Coach",
+  "description": "An AI-powered performance coach for professional athletes. Generates personalized training plans based on biometrics, performance data, and continuous feedback loops.",
+  "requestFramePermissions": []
+}
