@@ -2,9 +2,9 @@ import { Type } from "@google/genai";
 
 // Enums
 export enum Sport {
-  FOOTBALL = 'Football (Soccer)',
+  FOOTBALL = 'Football',
   BASKETBALL = 'Basketball',
-  SPRINT = 'Sprint (Track)',
+  SPRINT = 'Sprint',
   TENNIS = 'Tennis',
   OTHER = 'Other'
 }
