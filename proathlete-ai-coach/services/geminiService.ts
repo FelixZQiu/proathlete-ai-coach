@@ -1,5 +1,6 @@
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { AppSettings, UserProfile, TrainingPlan, DailyFeedback } from "../types";
+import { DEFAULT_INITIAL_PLAN_PROMPT, DEFAULT_ITERATE_PLAN_PROMPT } from "../constants";
 
 // Define the response schema structure for the API
 const exerciseSchema: Schema = {
@@ -72,6 +73,15 @@ async function withRetry<T>(
   }
 }
 
+// Helper to replace placeholders in prompt templates
+const fillPrompt = (template: string, data: Record<string, string | number>) => {
+  let res = template;
+  for (const key in data) {
+    res = res.replace(new RegExp(`{{${key}}}`, 'g'), String(data[key]));
+  }
+  return res;
+};
+
 export const generateInitialPlan = async (
   profile: UserProfile,
   settings: AppSettings
@@ -80,26 +90,24 @@ export const generateInitialPlan = async (
 
   const ai = new GoogleGenAI({ apiKey: settings.apiKey });
 
-  const prompt = `
-    You are a world-class Strength & Conditioning Coach for elite athletes.
-    
-    Athlete Profile:
-    - Sport: ${profile.sport}
-    - Age: ${profile.age}, Height: ${profile.heightCm}cm, Weight: ${profile.weightKg}kg
-    - Training Age: ${profile.trainingAge} years
-    - Injury History: ${profile.injuryHistory} (Status: ${profile.injuryStatus})
-    - Goals: ${profile.goals}
-    - Performance Stats: Squat ${profile.strengthSquat || 'N/A'}, Speed ${profile.speed10m || 'N/A'}, Endurance ${profile.enduranceVo2 || 'N/A'}
-    - Sport Specific: ${profile.sportSpecificStats}
-    - Constraints: ${profile.constraints}
-
-    Task:
-    Create a highly specific, periodized 7-day training microcycle (Week 1).
-    Ensure volume and intensity are appropriate for the athlete's level.
-    If the athlete is injured, prioritize rehab/prehab or work around it.
-    
-    Output strictly valid JSON matching the schema.
-  `;
+  // Use custom prompt from settings or fallback to default
+  const promptTemplate = settings.initialPlanPrompt || DEFAULT_INITIAL_PLAN_PROMPT;
+  
+  const prompt = fillPrompt(promptTemplate, {
+    SPORT: profile.sport,
+    AGE: profile.age,
+    HEIGHT: profile.heightCm,
+    WEIGHT: profile.weightKg,
+    TRAINING_AGE: profile.trainingAge,
+    INJURY_HISTORY: profile.injuryHistory,
+    INJURY_STATUS: profile.injuryStatus,
+    GOALS: profile.goals,
+    SQUAT: profile.strengthSquat || 'N/A',
+    SPEED: profile.speed10m || 'N/A',
+    ENDURANCE: profile.enduranceVo2 || 'N/A',
+    SPORT_SPECIFIC: profile.sportSpecificStats,
+    CONSTRAINTS: profile.constraints
+  });
 
   try {
     const response = await withRetry(() => ai.models.generateContent({
@@ -142,28 +150,19 @@ export const iteratePlan = async (
     `Day ${f.dayIndex}: Completed ${f.completionRate}%, RPE ${f.rpe}/10, Fatigue ${f.fatigue}/10, Pain ${f.painLevel}/10 (${f.painLocation || 'None'}). Notes: ${f.notes}`
   ).join('\n');
 
-  const prompt = `
-    You are iterating a training plan for an elite athlete based on last week's feedback.
+  // Use custom prompt from settings or fallback to default
+  const promptTemplate = settings.iteratePlanPrompt || DEFAULT_ITERATE_PLAN_PROMPT;
 
-    Athlete Context:
-    - Sport: ${profile.sport}
-    - Goal: ${profile.goals}
-    - Injuries: ${profile.injuryStatus === 'Active Issue' ? 'ACTIVE ISSUE' : 'Stable'}
-
-    Last Week's Plan ID: ${currentPlan.id} (Week ${currentPlan.weekNumber})
-    Last Week's Focus: ${currentPlan.summary}
-
-    Feedback Received:
-    ${feedbackSummary}
-
-    Task:
-    Generate Week ${currentPlan.weekNumber + 1}.
-    - If RPE was too high (>8 consistently) or Pain > 3, deload or adjust exercises.
-    - If RPE was too low (<5) and completion high, apply progressive overload (increase intensity/volume).
-    - Address any specific complaints in the feedback notes.
-
-    Output strictly valid JSON matching the schema.
-  `;
+  const prompt = fillPrompt(promptTemplate, {
+    SPORT: profile.sport,
+    GOALS: profile.goals,
+    INJURY_STATUS_TEXT: profile.injuryStatus === 'Active Issue' ? 'ACTIVE ISSUE' : 'Stable',
+    PLAN_ID: currentPlan.id,
+    WEEK_NUMBER: currentPlan.weekNumber,
+    PLAN_SUMMARY: currentPlan.summary,
+    FEEDBACK_SUMMARY: feedbackSummary,
+    NEXT_WEEK_NUMBER: currentPlan.weekNumber + 1
+  });
 
   try {
     const response = await withRetry(() => ai.models.generateContent({

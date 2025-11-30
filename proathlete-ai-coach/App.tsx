@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { InitialSettings } from './types';
+import { DEFAULT_INITIAL_PLAN_PROMPT, DEFAULT_ITERATE_PLAN_PROMPT } from './constants';
 import { UserProfile, TrainingPlan, DailyFeedback, AppSettings } from './types';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
@@ -8,7 +9,11 @@ import { generateInitialPlan, iteratePlan } from './services/geminiService';
 
 const App = () => {
   // --- State ---
-  const [settings, setSettings] = useState<AppSettings>(InitialSettings);
+  const [settings, setSettings] = useState<AppSettings>({
+    ...InitialSettings,
+    initialPlanPrompt: InitialSettings.initialPlanPrompt || DEFAULT_INITIAL_PLAN_PROMPT,
+    iteratePlanPrompt: InitialSettings.iteratePlanPrompt || DEFAULT_ITERATE_PLAN_PROMPT,
+  });
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const [feedbacks, setFeedbacks] = useState<DailyFeedback[]>([]);

@@ -82,11 +82,16 @@ export interface DailyFeedback {
 export interface AppSettings {
   apiKey: string;
   model: string;
+  initialPlanPrompt?: string;
+  iteratePlanPrompt?: string;
 }
 
-export const InitialSettings: AppSettings = {
+// Move InitialSettings to a separate file or keep it simple here, avoiding circular import
+export const InitialSettings: Omit<AppSettings, 'initialPlanPrompt' | 'iteratePlanPrompt'> & { initialPlanPrompt?: string, iteratePlanPrompt?: string } = {
   apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
   model: 'gemini-2.0-flash', // Default efficient model
+  // We cannot import constants here due to circular dependency (constants imports types)
+  // These will be populated in App.tsx or where used if missing
 };
 
 // Response Schemas for Gemini
