@@ -43,6 +43,35 @@ const trainingPlanSchema: Schema = {
   required: ["summary", "days"],
 };
 
+// Helper function for retry logic
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries <= 0) {
+      throw new Error(`Network request failed after multiple retries. Please check your internet connection or proxy settings. Original error: ${error.message}`);
+    }
+    
+    // Check if error is related to fetch failure
+    const isNetworkError = error.message?.includes('fetch failed') || 
+                          error.message?.includes('Failed to fetch') ||
+                          error.message?.includes('NetworkError');
+                          
+    if (isNetworkError) {
+       console.warn(`Network error detected, retrying... (${retries} attempts left).`);
+       await new Promise(res => setTimeout(res, delay));
+       return withRetry(fn, retries - 1, delay * 1.5); // Exponential backoff
+    }
+    
+    // If it's not a network error (e.g. 400 Bad Request), throw immediately
+    throw error;
+  }
+}
+
 export const generateInitialPlan = async (
   profile: UserProfile,
   settings: AppSettings
@@ -73,7 +102,7 @@ export const generateInitialPlan = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: settings.model,
       contents: prompt,
       config: {
@@ -81,7 +110,7 @@ export const generateInitialPlan = async (
         responseSchema: trainingPlanSchema,
         systemInstruction: "You are an expert sports scientist and coach. You prioritize safety, specificity, and progressive overload.",
       },
-    });
+    }));
 
     const jsonText = response.text || "{}";
     const data = JSON.parse(jsonText);
@@ -137,7 +166,7 @@ export const iteratePlan = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: settings.model,
       contents: prompt,
       config: {
@@ -145,7 +174,7 @@ export const iteratePlan = async (
         responseSchema: trainingPlanSchema,
         systemInstruction: "You are an adaptive AI coach. You listen to athlete bio-feedback to optimize performance and prevent overtraining.",
       },
-    });
+    }));
 
     const jsonText = response.text || "{}";
     const data = JSON.parse(jsonText);
